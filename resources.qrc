@@ -1,0 +1,22 @@
+<!DOCTYPE RCC><RCC version="1.0">
+    <qresource>
+        <file alias="edit_add_resource.png">images\edit_add_resource.png</file>
+        <file alias="edit_add_tab.png">images\edit_add_tab.png</file>
+        <file alias="edit_delete_resource.png">images\edit_delete_resource.png</file>
+        <file alias="edit_delete_tab.png">images\edit_delete_tab.png</file>
+        <file alias="edit_edit_resource.png">images\edit_edit_resource.png</file>
+        <file alias="edit_edit_tab.png">images\edit_edit_tab.png</file>
+        <file alias="edit_move_down.png">images\edit_move_down.png</file>
+        <file alias="edit_move_up.png">images\edit_move_up.png</file>
+        <file alias="edit_settings.png">images\edit_settings.png</file>
+        <file alias="edit_sort.png">images\edit_sort.png</file>
+        <file alias="edit_update.png">images\edit_update.png</file>
+        <file alias="file_compile.png">images\file_compile.png</file>
+        <file alias="file_new.png">images\file_new.png</file>
+        <file alias="file_open.png">images\file_open.png</file>
+        <file alias="file_quit.png">images\file_quit.png</file>
+        <file alias="file_save.png">images\file_save.png</file>
+        <file alias="file_save_as.png">images\file_save_as.png</file>
+        <file alias="icon.png">images\icon.png</file>
+    </qresource>
+</RCC>
