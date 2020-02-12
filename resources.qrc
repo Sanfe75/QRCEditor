@@ -11,11 +11,13 @@
         <file alias="edit_settings.png">images\edit_settings.png</file>
         <file alias="edit_sort.png">images\edit_sort.png</file>
         <file alias="edit_update.png">images\edit_update.png</file>
+        <file alias="file_close.png">images\file_close.png</file>
         <file alias="file_compile.png">images\file_compile.png</file>
         <file alias="file_new.png">images\file_new.png</file>
         <file alias="file_open.png">images\file_open.png</file>
         <file alias="file_quit.png">images\file_quit.png</file>
         <file alias="file_save.png">images\file_save.png</file>
+        <file alias="file_save_all.png">images\file_save_all.png</file>
         <file alias="file_save_as.png">images\file_save_as.png</file>
         <file alias="icon.png">images\icon.png</file>
     </qresource>

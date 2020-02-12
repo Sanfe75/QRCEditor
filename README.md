@@ -14,6 +14,6 @@ The program uses python 3.8 (I really had to try the walrus operator)
 and PySide2 5.14.
 
 The idea of the program is based on an example from:
-Rapid GUI Programming with Python and Qt ( ww.qtrac.eu/pyqtbook.html)
+Rapid GUI Programming with Python and Qt (www.qtrac.eu/pyqtbook.html)
 
 Also my thanks to https://icons8.com for the icons.

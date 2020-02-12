@@ -34,13 +34,27 @@ class QrcEditor(QMainWindow):
     """Create a QRC Editor main window application.
     """
 
-    def __init__(self, parent=None):
+    next_id = 1
+    instances = []
+
+    def __init__(self, file_name=None, parent=None):
         """Constructor for QrcEditor class.
         """
 
         super(QrcEditor, self).__init__(parent)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        QrcEditor.instances.append(self)
 
         self.collection = qrcdata.ResourceCollection()
+
+        if file_name is None:
+            self.collection.set_file_name("Unnamed-{0}".format(QrcEditor.next_id))
+            QrcEditor.next_id += 1
+            self.collection.set_dirty(False)
+        else:
+            _, message = self.collection.load(file_name)
+            self.statusBar().showMessage(message, 5000)
+
         self.options = {"program": "pyside2-rcc.exe",
                         "no_compress": False,
                         "compress": False,
@@ -62,9 +76,13 @@ class QrcEditor(QMainWindow):
                                               "file_open", "Open a Resource collection file")
         file_save_action = self.create_action("&Save", self.file_save, QKeySequence.Save,
                                               "file_save", "Save the Resource collection file")
+        file_save_all_action = self.create_action("Save A&ll", self.file_save_all, icon="file_save_all",
+                                                  tip="Save all the Resource collections")
         file_save_as_action = self.create_action("&Save as...", self.file_save_as, QKeySequence.SaveAs,
                                                  "file_save_as", "Save the Resource collection using a new name")
-        file_quit_action = self.create_action("&Quit", self.close, "Ctrl+Q",
+        file_close_action = self.create_action("&Close", self.close, QKeySequence.Close,
+                                               "file_close", "Close this editor")
+        file_quit_action = self.create_action("&Quit", self.file_quit, "Ctrl+Q",
                                               "file_quit", "Close the application")
         self.edit_add_resource_action = self.create_action("&Add Resource...", self.edit_add_resource, "Ctrl+A",
                                                            "edit_add_resource", "Add a resource")
@@ -92,13 +110,17 @@ class QrcEditor(QMainWindow):
         help_about_action = self.create_action("&About QRC Editor", self.help_about)
 
         file_menu = self.menuBar().addMenu("&File")
-        self.add_actions(file_menu, (file_new_action, file_open_action, file_save_action, file_save_as_action, None,
-                                     self.file_compile_action, None, file_quit_action))
+        self.add_actions(file_menu, (file_new_action, file_open_action, file_save_action, file_save_all_action,
+                                     file_save_as_action, None, self.file_compile_action, None, file_close_action,
+                                     file_quit_action))
         edit_menu = self.menuBar().addMenu("&Edit")
         self.add_actions(edit_menu, (self.edit_add_resource_action, self.edit_edit_resource_action,
                                      self.edit_remove_resource_action, None, self.edit_add_tab_action,
                                      self.edit_edit_tab_action, self.edit_remove_tab_action, None,
                                      self.edit_sort_action, self.edit_update_action, None, edit_settings_action))
+
+        self.window_menu = self.menuBar().addMenu("&Window")
+
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction(help_about_action)
 
@@ -118,6 +140,7 @@ class QrcEditor(QMainWindow):
         self.central_widget.setTabsClosable(True)
         self.central_widget.tabCloseRequested.connect(self.edit_remove_tab)
         self.central_widget.currentChanged.connect(self.update_ui)
+        self.window_menu.aboutToShow.connect(self.update_window_menu)
 
         self.load_settings()
         self.update_widget()
@@ -140,6 +163,20 @@ class QrcEditor(QMainWindow):
                 target.addSeparator()
             else:
                 target.addAction(action)
+
+    @staticmethod
+    def is_open(file_name):
+        """Check if an editor with file_name collection is open.
+
+        If an editor with file_name collection is open the method shows the existing window, otherwise returns False
+        """
+
+        for editor in QrcEditor.instances:
+            if editor.collection.file_name() == file_name:
+                editor.activateWindow()
+                editor.raise_()
+                return True
+        return False
 
     def check_program(self, program):
         """Check the program used to compile the .qrc file.
@@ -168,6 +205,7 @@ class QrcEditor(QMainWindow):
             settings.setValue("Options/CompressLevel", self.options["compress_level"])
             settings.setValue("Options/Threshold", self.options["threshold"])
             settings.setValue("Options/ThresholdLevel", self.options["threshold_level"])
+            QrcEditor.instances.remove(self)
         else:
             event.ignore()
 
@@ -180,7 +218,7 @@ class QrcEditor(QMainWindow):
         shortcut (str): the shortcut
         icon (str): the icon file name without ext
         tip (str): the tooltip for the action
-        chackable (bool): if checkable
+        checkable (bool): if checkable
         signal (str): the signal type
 
         Return:
@@ -414,27 +452,21 @@ class QrcEditor(QMainWindow):
         """Create a new file.
         """
 
-        if not self.ok_to_continue():
-            return
-
-        self.collection.clear()
-        self.statusBar().clearMessage()
         file_name, _ = QFileDialog.getSaveFileName(self, "QRC Editor - Save Resource Collection File",
                                                    ".", "Resource Collection file (*.qrc)")
         if file_name:
+            print("{0} - {1}".format(self.collection.file_name(), self.collection.dirty()))
             if file_name[-4:].lower() != ".qrc":
                 file_name += ".qrc"
-            self.collection.set_file_name(file_name)
-
-        self.update_widget()
-        self.update_ui()
+            if not self.collection.dirty() and self.collection.file_name().startswith("Unnamed"):
+                self.collection.set_file_name(file_name)
+                self.update_ui()
+            else:
+                QrcEditor(file_name).show()
 
     def file_open(self):
         """Create the dialog to select and then open a qrc file.
         """
-
-        if not self.ok_to_continue():
-            return
 
         file_dir = os.path.dirname(self.collection.file_name())\
             if self.collection.file_name() is not None else "."
@@ -443,22 +475,48 @@ class QrcEditor(QMainWindow):
         if file_name:
             if file_name[-4:].lower() != ".qrc":
                 file_name += ".qrc"
-            _, message = self.collection.load(file_name)
-            self.statusBar().showMessage(message, 5000)
-            self.update_widget()
-            self.update_ui()
+
+            if not self.is_open(file_name):
+                if not self.collection.dirty() and self.collection.file_name().startswith("Unnamed"):
+                    _, message = self.collection.load(file_name)
+                    self.statusBar().showMessage(message, 5000)
+                else:
+                    QrcEditor(file_name).show()
+                self.update_widget()
+                self.update_ui()
+
+    @staticmethod
+    def file_quit():
+        """Close all the files and exit the application.
+        """
+
+        QApplication.closeAllWindows()
 
     def file_save(self):
         """Save a file.
         """
 
-        if not self.collection.file_name():
+        if self.collection.file_name().startswith("Unnamed"):
             self.file_save_as()
         else:
             result, message = self.collection.save()
             self.statusBar().showMessage(message, 5000)
             self.update_ui()
             return result
+
+    def file_save_all(self):
+        """Save all the files.
+        """
+
+        count = 0
+        for editor in QrcEditor.instances:
+            if editor.collection.dirty():
+                ok, message = editor.collection.save()
+                if ok:
+                    count += 1
+                    self.statusBar().showMessage(message, 5000)
+        self.statusBar().showMessage("Saved {0} of {1} files".format(count, len(QrcEditor.instances)), 5000)
+        self.update_ui()
 
     def file_save_as(self):
         """Create the dialog to save a new file.
@@ -517,6 +575,17 @@ class QrcEditor(QMainWindow):
         if (threshold_level := settings.value("Options/ThresholdLevel")) is not None:
             self.options["threshold_level"] = int(threshold_level)
 
+    def raise_window(self):
+        """Raise and make active editor_to_rise
+        """
+
+        title = self.sender().text().split(maxsplit=1)[1]
+        for editor in QrcEditor.instances:
+            if editor.windowTitle()[:-3] == title:
+                editor.activateWindow()
+                editor.raise_()
+                break
+
     def update_table(self, table, resources, current=None):
         """Create a table and populate it.
 
@@ -569,10 +638,7 @@ class QrcEditor(QMainWindow):
         resource_selected = table_exist and table.currentRow() >= 0
         multiple_rows = table_exist and table.rowCount() > 1
 
-        if file_name_exist:
-            self.setWindowTitle("QRC Editor - {0}[*]".format(os.path.basename(file_name)))
-        else:
-            self.setWindowTitle("QRC Editor[*]")
+        self.setWindowTitle("QRC Editor - {0}[*]".format(os.path.basename(file_name)))
         self.setWindowModified(self.collection.dirty())
 
         if table_exist:
@@ -633,6 +699,27 @@ class QrcEditor(QMainWindow):
 
         if current:
             self.central_widget.setCurrentIndex(current)
+
+    def update_window_menu(self):
+        """Update the window menu dinamically.
+        """
+
+        self.window_menu.clear()
+        menu = self.window_menu
+        i = 1
+        for editor in QrcEditor.instances:
+            title = editor.windowTitle()[:-3]
+            shortcut = ""
+            if i == 10:
+                menu.addSeparator()
+                menu = menu.addMenu("&More")
+            if i < 10:
+                shortcut = "&{0} ".format(i)
+            elif i < 36:
+                shortcut = "&{0} ".format(chr(i + ord("@") - 9))
+            action = menu.addAction("{0}{1}".format(shortcut, title))
+            action.triggered.connect(self.raise_window)
+            i += 1
 
 
 if __name__ == "__main__":
