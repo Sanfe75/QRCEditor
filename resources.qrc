@@ -7,6 +7,8 @@
         <file alias="edit_edit_resource.png">images\edit_edit_resource.png</file>
         <file alias="edit_edit_tab.png">images\edit_edit_tab.png</file>
         <file alias="edit_move_down.png">images\edit_move_down.png</file>
+        <file alias="edit_move_left.png">images\edit_move_left.png</file>
+        <file alias="edit_move_right.png">images\edit_move_right.png</file>
         <file alias="edit_move_up.png">images\edit_move_up.png</file>
         <file alias="edit_settings.png">images\edit_settings.png</file>
         <file alias="edit_sort.png">images\edit_sort.png</file>

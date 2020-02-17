@@ -108,7 +108,7 @@ class ResourceDlg(QDialog):
             self.resources.insert(self.index, self.resource)
             self.collection.set_dirty(True)
         else:
-            if alias != self.resource.alias:
+            if alias != self.resource.alias():
                 self.resource.set_alias(alias)
                 self.collection.set_dirty(True)
             if file != self.resource.file():
@@ -360,22 +360,30 @@ class TabDlg(QDialog):
         """Add/Update the resource tab.
         """
 
-        if self.resources is not None:
-            if (language := LANGUAGES[self.language_combo_box.currentIndex()][1]) != self.resources.language():
-                self.resources.set_language(language)
-                self.collection.set_dirty(True)
-            if (prefix := self.prefix_line_edit.text()) != self.resources.prefix():
-                self.resources.set_prefix(prefix)
-                self.collection.set_dirty(True)
+        language = LANGUAGES[self.language_combo_box.currentIndex()][1]
+        prefix = self.prefix_line_edit.text() if self.prefix_line_edit.text() != "" else None
+        resources = qrcdata.Resources(language, prefix)
+
+        if resources in self.collection:
+            index = self.collection.index(resources)
+            if self.resources is not None:
+                reply = QMessageBox.question(self, "QRC Editor - Merge Tabs", "Tab already present, merge the tabs?",
+                                             QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    self.collection.set_dirty(True)
+                    self.collection[index].extend(self.collection[self.index])
+                    del self.collection[self.index]
+
+            self.index = index if index < self.index else index - 1
         else:
-            if self.prefix_line_edit.text() != "":
-                self.resources = qrcdata.Resources(LANGUAGES[self.language_combo_box.currentIndex()][1],
-                                                   self.prefix_line_edit.text())
+            self.collection.set_dirty(True)
+            if self.resources is not None:
+                if language != self.resources.language():
+                    self.resources.set_language(language)
+                if prefix != self.resources.prefix():
+                    self.resources.set_prefix(prefix)
             else:
-                self.resources = qrcdata.Resources(LANGUAGES[self.language_combo_box.currentIndex()][1])
-            if self.resources not in self.collection:
-                self.collection.insert(self.index, self.resources)
-                self.collection.set_dirty(True)
+                self.collection.insert(self.index, resources)
 
         QDialog.accept(self)
 

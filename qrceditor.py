@@ -27,7 +27,7 @@ import qrcdata
 import qrcdlg
 import qrcresources
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 
 class QrcEditor(QMainWindow):
@@ -62,6 +62,7 @@ class QrcEditor(QMainWindow):
                         "threshold": False,
                         "threshold_level": 70}
         self.help_message = ""
+        self.rcc_version = None
         self.central_widget = QTabWidget()
         self.setCentralWidget(self.central_widget)
 
@@ -102,11 +103,17 @@ class QrcEditor(QMainWindow):
         self.edit_move_down_action = self.create_action("Move &Down", self.edit_move_down,
                                                         QKeySequence.MoveToPreviousLine, "edit_move_down",
                                                         "Move the resource down")
+        self.edit_move_left_action = self.create_action("Move &Left", self.edit_move_left,
+                                                        QKeySequence.MoveToPreviousPage, "edit_move_left",
+                                                        "Move the resources to the left")
+        self.edit_move_right_action = self.create_action("Move &Right", self.edit_move_right,
+                                                         QKeySequence.MoveToNextPage, "edit_move_right",
+                                                         "Move the resources to the right")
         self.edit_sort_action = self.create_action("&Sort...", self.edit_sort, "Ctrl+S",
                                                    "edit_sort", "Sort the resource table")
         self.edit_update_action = self.create_action("&Update", self.edit_update, QKeySequence.Refresh,
                                                      "edit_update", "Update the resource table")
-        edit_settings_action = self.create_action("&Settings...", self.edit_settings, "Ctrl+S", "edit_settings")
+        edit_settings_action = self.create_action("&Settings...", self.edit_settings, "Ctrl+I", "edit_settings")
         help_about_action = self.create_action("&About QRC Editor", self.help_about)
 
         file_menu = self.menuBar().addMenu("&File")
@@ -115,9 +122,11 @@ class QrcEditor(QMainWindow):
                                      file_quit_action))
         edit_menu = self.menuBar().addMenu("&Edit")
         self.add_actions(edit_menu, (self.edit_add_resource_action, self.edit_edit_resource_action,
-                                     self.edit_remove_resource_action, None, self.edit_add_tab_action,
-                                     self.edit_edit_tab_action, self.edit_remove_tab_action, None,
-                                     self.edit_sort_action, self.edit_update_action, None, edit_settings_action))
+                                     self.edit_remove_resource_action, self.edit_move_up_action,
+                                     self.edit_move_down_action, self.edit_sort_action, None, self.edit_add_tab_action,
+                                     self.edit_edit_tab_action, self.edit_remove_tab_action, self.edit_move_left_action,
+                                     self.edit_move_right_action, None, self.edit_update_action, None,
+                                     edit_settings_action))
 
         self.window_menu = self.menuBar().addMenu("&Window")
 
@@ -131,10 +140,10 @@ class QrcEditor(QMainWindow):
         edit_toolbar = self.addToolBar("Edit")
         edit_toolbar.setObjectName("EditToolbar")
         self.add_actions(edit_toolbar, (self.edit_add_resource_action, self.edit_edit_resource_action,
-                                        self.edit_remove_resource_action, None, self.edit_add_tab_action,
-                                        self.edit_edit_tab_action, None, self.edit_move_up_action,
-                                        self.edit_move_down_action, self.edit_sort_action,
-                                        self.edit_update_action))
+                                        self.edit_remove_resource_action, self.edit_move_up_action,
+                                        self.edit_move_down_action, self.edit_sort_action, None,
+                                        self.edit_add_tab_action, self.edit_edit_tab_action, self.edit_move_left_action,
+                                        self.edit_move_right_action, None, self.edit_update_action))
         file_toolbar.setObjectName("EditToolbar")
 
         self.central_widget.setTabsClosable(True)
@@ -188,6 +197,11 @@ class QrcEditor(QMainWindow):
             return False
         if completed and completed.returncode == 0:
             self.help_message = completed.stdout.decode("UTF-8")
+            try:
+                completed = subprocess.run([program, "-version"], capture_output=True)
+            except (IOError, OSError, subprocess.CalledProcessError):
+                self.rcc_version = None
+            self.rcc_version = completed.stdout.decode("UTF-8")
             return True
         return False
 
@@ -286,7 +300,6 @@ class QrcEditor(QMainWindow):
         initial_length = len(self.collection)
         dialog = qrcdlg.TabDlg(self.collection, None, self.central_widget.currentIndex(), self)
         if dialog.exec_():
-            self.collection.set_dirty(True)
             self.update_widget(dialog.index)
             self.update_ui()
             if len(self.collection) > initial_length:
@@ -316,7 +329,6 @@ class QrcEditor(QMainWindow):
 
         dialog = qrcdlg.TabDlg(self.collection, self.collection[self.central_widget.currentIndex()], self)
         if dialog.exec_():
-            self.collection.set_dirty(True)
             self.update_widget(dialog.index)
             self.update_ui()
             self.statusBar().showMessage("Tab edited", 5000)
@@ -335,6 +347,30 @@ class QrcEditor(QMainWindow):
         self.update_table(table, resources, id(resources[resources_index + 1]))
         self.update_ui()
         self.statusBar().showMessage("Resource moved", 5000)
+
+    def edit_move_left(self):
+        """Move the active tab to the left.
+        """
+
+        index = self.central_widget.currentIndex()
+        self.collection[index - 1], self.collection[index] = self.collection[index], self.collection[index - 1]
+
+        self.collection.set_dirty(True)
+        self.update_widget()
+        self.central_widget.setCurrentIndex(index - 1)
+        self.statusBar().showMessage("Tab moved", 5000)
+
+    def edit_move_right(self):
+        """Move the active tab to the right.
+        """
+
+        index = self.central_widget.currentIndex()
+        self.collection[index + 1], self.collection[index] = self.collection[index], self.collection[index + 1]
+
+        self.collection.set_dirty(True)
+        self.update_widget()
+        self.central_widget.setCurrentIndex(index + 1)
+        self.statusBar().showMessage("Tab moved", 5000)
 
     def edit_move_up(self):
         """Move the selected resource up one line.
@@ -538,18 +574,19 @@ class QrcEditor(QMainWindow):
         """Open the about message.
         """
 
-        QMessageBox.about(self, "About QRC Editor",
-                          """<b>QRC Editor</b> v {0}
-                          <p>Copyright &copy; Sanfe Ltd.
-                          All rights reserved.
-                          <p>This application can be used to create and
-                          compile a resource collection file that can
-                          be used in in python pyside2 projects.
-                          <p> Python {1} - Qt {2} - PySide2 {3} on {4}
-                          <p> Icons by <a href='https://icons8.com'>Icons8</a>
-                          """.format(__version__, platform.python_version(),
-                                     PySide2.QtCore.__version__,
-                                     PySide2.__version__, platform.system()))
+        message = """<b>QRC Editor</b> v {0}
+                     <p>Copyright &copy; Sanfe Ltd.
+                     All rights reserved.
+                     <p>This application can be used to create and
+                     compile a resource collection file that can
+                     be used in in python pyside2 projects.
+                     <p> Python {1} - Qt {2} - PySide2 {3}
+                     """.format(__version__, platform.python_version(), PySide2.QtCore.__version__, PySide2.__version__)
+
+        if self.rcc_version is not None:
+            message += " - {0}".format(self.rcc_version)
+        message += " on {0}.<p> Icons by <a href='https://icons8.com'>Icons8</a>".format(platform.system())
+        QMessageBox.about(self, "About QRC Editor", message)
 
     def load_settings(self):
         """Load settings for the application.
@@ -637,6 +674,7 @@ class QrcEditor(QMainWindow):
         table_exist = (table := self.central_widget.currentWidget()) is not None
         resource_selected = table_exist and table.currentRow() >= 0
         multiple_rows = table_exist and table.rowCount() > 1
+        multiple_tables = len(self.collection) > 1
 
         self.setWindowTitle("QRC Editor - {0}[*]".format(os.path.basename(file_name)))
         self.setWindowModified(self.collection.dirty())
@@ -663,11 +701,18 @@ class QrcEditor(QMainWindow):
             self.edit_add_resource_action.setEnabled(False)
 
         if multiple_rows and resource_selected:
-            self.edit_move_down_action.setEnabled(table.currentRow() < table.rowCount() - 1)
-            self.edit_move_up_action.setEnabled(table.currentRow() > 0)
+            self.edit_move_down_action.setEnabled((index := table.currentRow()) < table.rowCount() - 1)
+            self.edit_move_up_action.setEnabled(index > 0)
         else:
             self.edit_move_down_action.setEnabled(False)
             self.edit_move_up_action.setEnabled(False)
+
+        if multiple_tables:
+            self.edit_move_left_action.setEnabled((index := self.central_widget.currentIndex()) > 0)
+            self.edit_move_right_action.setEnabled(index < len(self.collection) - 1)
+        else:
+            self.edit_move_left_action.setEnabled(False)
+            self.edit_move_right_action.setEnabled(False)
 
         self.edit_sort_action.setEnabled(multiple_rows)
         self.edit_update_action.setEnabled(len(self.collection) > 0)
