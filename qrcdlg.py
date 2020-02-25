@@ -123,7 +123,7 @@ class ResourceDlg(QDialog):
 
         file_dlg = ResourceFileDlg(self.collection.file_name(), self.file_line_edit.text())
         if file_dlg.exec_():
-            file_name = os.path.abspath(file_dlg.selectedFiles()[0])
+            file_name = os.path.realpath(file_dlg.selectedFiles()[0])
             if file_name.startswith(os.path.abspath(os.path.dirname(self.collection.file_name()))):
                 self.file_line_edit.setText(file_name[1 + len(os.path.dirname(self.collection.file_name())):])
             else:
@@ -151,7 +151,7 @@ class ResourceFileDlg(QFileDialog):
         if (not path.startswith(self.path)) or (not os.path.isdir(path)):
             path = self.path
         self.setDirectory(path)
-        self.setFileMode(QFileDialog.FileMode.ExistingFile)
+        self.setFileMode(QFileDialog.FileMode.ExistingFiles)
 
         self.directoryEntered.connect(self.check_path)
 

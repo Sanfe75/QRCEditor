@@ -27,7 +27,7 @@ import qrcdata
 import qrcdlg
 import qrcresources
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 
 class QrcEditor(QMainWindow):
@@ -87,8 +87,14 @@ class QrcEditor(QMainWindow):
                                               "file_quit", "Close the application")
         self.edit_add_resource_action = self.create_action("&Add Resource...", self.edit_add_resource, "Ctrl+A",
                                                            "edit_add_resource", "Add a resource")
+        self.edit_copy_action = self.create_action("Copy", self.edit_copy, QKeySequence.Copy, "edit_copy",
+                                                   "Copy selected resources")
+        self.edit_cut_action = self.create_action("Cut", self.edit_cut, QKeySequence.Cut, "edit_cut",
+                                                  "Cut selected resources")
         self.edit_edit_resource_action = self.create_action("&Edit Resource...", self.edit_edit_resource, "Ctrl+E",
                                                             "edit_edit_resource", "Edit the selected resource")
+        self.edit_paste_action = self.create_action("Paste", self.edit_paste, QKeySequence.Paste, "edit_paste",
+                                                    "Paste resource")
         self.edit_remove_resource_action = self.create_action("&Remove Resource", self.edit_remove_resource,
                                                               QKeySequence.Delete,
                                                               "edit_delete_resource", "Remove the selected resource")
@@ -114,6 +120,13 @@ class QrcEditor(QMainWindow):
         self.edit_update_action = self.create_action("&Update", self.edit_update, QKeySequence.Refresh,
                                                      "edit_update", "Update the resource table")
         edit_settings_action = self.create_action("&Settings...", self.edit_settings, "Ctrl+I", "edit_settings")
+        self.window_arrange_horizontal_action = self.create_action("Tile &Horizontally",
+                                                                   self.window_arrange_horizontal,
+                                                                   "Alt+H", "window_arrange_horizontal",
+                                                                   "Arrange the windows horizontally")
+        self.window_arrange_vertical_action = self.create_action("Tile &Vertically", self.window_arrange_vertical,
+                                                                 "Alt+V", "window_arrange_vertical",
+                                                                 "Arrange the windows vertically")
         help_about_action = self.create_action("&About QRC Editor", self.help_about)
 
         file_menu = self.menuBar().addMenu("&File")
@@ -121,7 +134,8 @@ class QrcEditor(QMainWindow):
                                      file_save_as_action, None, self.file_compile_action, None, file_close_action,
                                      file_quit_action))
         edit_menu = self.menuBar().addMenu("&Edit")
-        self.add_actions(edit_menu, (self.edit_add_resource_action, self.edit_edit_resource_action,
+        self.add_actions(edit_menu, (self.edit_paste_action, self.edit_copy_action, self.edit_cut_action, None,
+                                     self.edit_add_resource_action, self.edit_edit_resource_action,
                                      self.edit_remove_resource_action, self.edit_move_up_action,
                                      self.edit_move_down_action, self.edit_sort_action, None, self.edit_add_tab_action,
                                      self.edit_edit_tab_action, self.edit_remove_tab_action, self.edit_move_left_action,
@@ -150,7 +164,9 @@ class QrcEditor(QMainWindow):
         self.central_widget.tabCloseRequested.connect(self.edit_remove_tab)
         self.central_widget.currentChanged.connect(self.update_ui)
         self.window_menu.aboutToShow.connect(self.update_window_menu)
+        QApplication.clipboard().dataChanged.connect(self.check_clipboard)
 
+        self.check_clipboard()
         self.load_settings()
         self.update_widget()
         self.update_ui()
@@ -185,6 +201,41 @@ class QrcEditor(QMainWindow):
                 editor.activateWindow()
                 editor.raise_()
                 return True
+        return False
+
+    def check_clipboard(self):
+        """Check if it is possible to paste the content of the clipboard.
+        """
+
+        data = QApplication.clipboard().mimeData()
+        if not data.hasText():
+            self.edit_paste_action.setEnabled(False)
+        else:
+            enable = True
+            new_resources = [resource.split("\t") for resource in data.text().strip().split("\n")]
+            for resource in new_resources:
+                if len(resource) > 2:
+                    enable = False
+                    break
+                file_name = resource[-1]
+
+                if not self.check_file(file_name):
+                    enable = False
+                    break
+            self.edit_paste_action.setEnabled(enable)
+
+    def check_file(self, file_name):
+        """Check if file_name is a valid file and if it is in a subdirectory of the present working directory.
+        """
+
+        pwd = os.path.realpath(os.path.dirname(self.collection.file_name()))
+        if file_name.startswith("file:///"):
+            file_name = file_name[len("file:///"):]
+        else:
+            file_name = os.path.join(pwd, file_name)
+
+        if os.path.isfile(file_name) and pwd == os.path.commonpath([file_name, pwd]):
+            return True
         return False
 
     def check_program(self, program):
@@ -278,18 +329,23 @@ class QrcEditor(QMainWindow):
         """
 
         file_dlg = qrcdlg.ResourceFileDlg(self.collection.file_name())
-        file_name = None
+        indexes = []
+        row = self.central_widget.currentWidget().currentRow()
         if file_dlg.exec_():
-            file_name = os.path.abspath(file_dlg.selectedFiles()[0])
-            if not file_name.startswith(os.path.abspath(os.path.dirname(self.collection.file_name()))):
-                QMessageBox.warning(self, "File Error", "Selected file is not in a subdirectory of {0}"
-                                    .format(os.path.basename(self.collection.file_name())))
-                file_name = None
-        if file_name:
-            dialog = qrcdlg.ResourceDlg(self.collection, self.central_widget.currentIndex(),
-                                        self.central_widget.currentWidget().currentRow(), file_name, self)
+            file_names = file_dlg.selectedFiles()
+            for index, file_name in enumerate(file_names):
+                if not os.path.abspath(file_name).startswith(os.path.abspath(os.path.
+                                                             dirname(self.collection.file_name()))):
+                    QMessageBox.warning(self, "File Error", "Selected file is not in a subdirectory of {0}"
+                                        .format(os.path.basename(self.collection.file_name())))
+                    file_names[index] = None
+        file_names = [file for file in file_names if file is not None]
+        for file_name in file_names:
+            dialog = qrcdlg.ResourceDlg(self.collection, self.central_widget.currentIndex(), row, file_name, self)
+            row += 1
+            indexes.append(row)
             if dialog.exec_():
-                self.update_table(self.central_widget.currentWidget(), dialog.resources, id(dialog.resource))
+                self.update_table(self.central_widget.currentWidget(), dialog.resources, indexes)
                 self.update_ui()
                 self.statusBar().showMessage("Resource added", 5000)
 
@@ -307,6 +363,31 @@ class QrcEditor(QMainWindow):
             else:
                 self.statusBar().showMessage("Tab already existing", 5000)
 
+    def edit_copy(self):
+        """Copy the selected resources to the clipboard.
+        """
+
+        table = self.central_widget.currentWidget()
+        table_index = self.central_widget.currentIndex()
+        resources = self.collection[table_index]
+        indexes = [selected.row() for selected in table.selectionModel().selectedRows()]
+        text = ""
+
+        for index in indexes:
+            alias = resources[index].alias()
+            file = resources[index].file()
+            line = "{0}\t{1}".format(alias, file) if alias is not None else file
+            text += "{0}\n".format(line)
+
+        QApplication.clipboard().setText(text)
+
+    def edit_cut(self):
+        """Cut the selected resources to the clipboard.
+        """
+
+        self.edit_copy()
+        self.edit_remove_resource()
+
     def edit_edit_resource(self):
         """Edit the selected resource.
         """
@@ -314,14 +395,16 @@ class QrcEditor(QMainWindow):
         table = self.central_widget.currentWidget()
         table_index = self.central_widget.currentIndex()
         resources = self.collection[table_index]
-        resources_index = table.currentRow()
+        indexes = [selected.row() for selected in table.selectionModel().selectedRows()]
 
-        dialog = qrcdlg.ResourceDlg(self.collection, table_index, resources_index, parent=self)
-        if dialog.exec_():
-            self.collection.set_dirty(True)
-            self.update_table(table, resources, id(dialog.resource))
-            self.update_ui()
-            self.statusBar().showMessage("Resource edited", 5000)
+        for index in indexes:
+            dialog = qrcdlg.ResourceDlg(self.collection, table_index, index, parent=self)
+            if dialog.exec_():
+                self.collection.set_dirty(True)
+                self.statusBar().showMessage("Resource edited", 5000)
+
+        self.update_table(table, resources, indexes)
+        self.update_ui()
 
     def edit_edit_tab(self):
         """Edit a tab.
@@ -340,13 +423,16 @@ class QrcEditor(QMainWindow):
         table = self.central_widget.currentWidget()
         table_index = self.central_widget.currentIndex()
         resources = self.collection[table_index]
-        resources_index = table.currentRow()
-        resources[resources_index], resources[resources_index + 1] = resources[resources_index + 1],\
-            resources[resources_index]
+        indexes = sorted([selected.row() for selected in table.selectionModel().selectedRows()], reverse=True)
+        for index in indexes:
+            resources[index], resources[index + 1] = resources[index + 1], resources[index]
+
         self.collection.set_dirty(True)
-        self.update_table(table, resources, id(resources[resources_index + 1]))
+        indexes = [index + 1 for index in indexes]
+        self.update_table(table, resources, indexes)
         self.update_ui()
-        self.statusBar().showMessage("Resource moved", 5000)
+        message = "Resource moved" if len(indexes) == 1 else "Resources moved"
+        self.statusBar().showMessage(message, 5000)
 
     def edit_move_left(self):
         """Move the active tab to the left.
@@ -379,13 +465,45 @@ class QrcEditor(QMainWindow):
         table = self.central_widget.currentWidget()
         table_index = self.central_widget.currentIndex()
         resources = self.collection[table_index]
-        resources_index = table.currentRow()
-        resources[resources_index], resources[resources_index - 1] = resources[resources_index - 1],\
-            resources[resources_index]
+        indexes = sorted([selected.row() for selected in table.selectionModel().selectedRows()])
+        for index in indexes:
+            resources[index - 1], resources[index] = resources[index], resources[index - 1]
+
         self.collection.set_dirty(True)
-        self.update_table(table, resources, id(resources[resources_index + -1]))
+        indexes = [index - 1 for index in indexes]
+        self.update_table(table, resources, indexes)
         self.update_ui()
-        self.statusBar().showMessage("Resource moved", 5000)
+        message = "Resource moved" if len(indexes) == 1 else "Resources moved"
+        self.statusBar().showMessage(message, 5000)
+
+    def edit_paste(self):
+        """Paste the content of the clipboard to the resources.
+        """
+
+        table_index = self.central_widget.currentIndex()
+        resources = self.collection[table_index]
+        new_resources = QApplication.clipboard().text().strip().split("\n")
+
+        indexes = []
+        row = self.central_widget.currentWidget().currentRow() + 1
+        for data in new_resources:
+            data = data.split("\t")
+            if len(data) == 1:
+                if data[0].startswith("file:///"):
+                    file = data[0][len("file:///") + len(os.path.dirname(self.collection.file_name())):]
+                else:
+                    file = data[0]
+                resource = qrcdata.Resource(file)
+            else:
+                resource = qrcdata.Resource(data[1], data[0])
+            resources.insert(row, resource)
+            indexes.append(row)
+            row += 1
+
+        self.update_table(self.central_widget.currentWidget(), self.collection[table_index], indexes)
+        self.collection.set_dirty(True)
+        self.update_ui()
+        self.statusBar().showMessage("Clipboard pasted", 5000)
 
     def edit_remove_resource(self):
         """Remove the selected resource.
@@ -394,11 +512,15 @@ class QrcEditor(QMainWindow):
         table = self.central_widget.currentWidget()
         table_index = self.central_widget.currentIndex()
         resources = self.collection[table_index]
-        resources.pop(table.currentRow())
+        indexes = sorted([selected.row() for selected in table.selectionModel().selectedRows()], reverse=True)
+        message = "Resources removed" if len(indexes) > 1 else "Resource removed"
+
+        for index in indexes:
+            resources.pop(index)
         self.collection.set_dirty(True)
         self.update_table(table, resources)
         self.update_ui()
-        self.statusBar().showMessage("Resource removed", 5000)
+        self.statusBar().showMessage(message, 5000)
 
     def edit_remove_tab(self, index=-1):
         """remove a tab.
@@ -434,6 +556,8 @@ class QrcEditor(QMainWindow):
             table = self.central_widget.currentWidget()
             table_index = self.central_widget.currentIndex()
             resources = self.collection[table_index]
+            indexes = [selected.row() for selected in table.selectionModel().selectedRows()]
+            selected_resources = [resources[index] for index in indexes]
             if dialog.key_combo_box.currentIndex() == 0:
                 resources.sort(key=lambda resource: [resource.alias(), resource.file()],
                                reverse=dialog.reverse_checkbox.isChecked())
@@ -441,7 +565,8 @@ class QrcEditor(QMainWindow):
                 resources.sort(key=lambda resource: [resource.file(), resource.alias()],
                                reverse=dialog.reverse_checkbox.isChecked())
             self.collection.set_dirty(True)
-            self.update_table(table, resources, table.currentRow())
+            indexes = [resources.index(resource) for resource in selected_resources]
+            self.update_table(table, resources, indexes)
             self.update_ui()
             self.statusBar().showMessage("Table updated", 5000)
 
@@ -491,7 +616,6 @@ class QrcEditor(QMainWindow):
         file_name, _ = QFileDialog.getSaveFileName(self, "QRC Editor - Save Resource Collection File",
                                                    ".", "Resource Collection file (*.qrc)")
         if file_name:
-            print("{0} - {1}".format(self.collection.file_name(), self.collection.dirty()))
             if file_name[-4:].lower() != ".qrc":
                 file_name += ".qrc"
             if not self.collection.dirty() and self.collection.file_name().startswith("Unnamed"):
@@ -623,26 +747,31 @@ class QrcEditor(QMainWindow):
                 editor.raise_()
                 break
 
-    def update_table(self, table, resources, current=None):
+    def update_table(self, table, resources, current_indexes=[]):
         """Create a table and populate it.
 
         Parameters:
         table (QTabWidget): the table to populate
         resources: the resources used to populate the table
-        current: the id of the current resource, to keep the correct resource selected
+        current_indexes: the list of indexes of the current resources, to keep the correct resource selected
 
         Return:
         QTabWidget: the populated table
         """
 
+        table.clearSelection()
         table.setRowCount(len(resources))
         table.setColumnCount(2)
         table.setHorizontalHeaderLabels(["Alias", "File"])
         table.setAlternatingRowColors(True)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setSelectionMode(QTableWidget.SingleSelection)
-        selected = None
+        table.setSelectionMode(QTableWidget.MultiSelection)
+        table.setContextMenuPolicy(Qt.ActionsContextMenu)
+        self.add_actions(table, (self.edit_paste_action, self.edit_copy_action, self.edit_cut_action,
+                                 self.edit_add_resource_action, self.edit_edit_resource_action,
+                                 self.edit_remove_resource_action, self.edit_move_up_action,
+                                 self.edit_move_down_action, self.edit_update_action))
 
         for row, resource in enumerate(resources):
             alias = QTableWidgetItem(resource.alias())
@@ -651,8 +780,6 @@ class QrcEditor(QMainWindow):
                 alias.setTextColor(Qt.red)
             else:
                 alias.setTextColor(Qt.black)
-            if current is not None and current == id(resource):
-                selected = alias
             if os.path.isfile(os.path.join(os.path.dirname(self.collection.file_name()), resource.file())):
                 file.setTextColor(Qt.black)
             else:
@@ -660,10 +787,11 @@ class QrcEditor(QMainWindow):
             table.setItem(row, 0, alias)
             table.setItem(row, 1, file)
         table.resizeColumnsToContents()
-        if selected is not None:
-            selected.setSelected(True)
-            table.setCurrentItem(selected)
-            table.scrollToItem(selected)
+
+        for index in current_indexes:
+            table.selectRow(index)
+
+        table.setFocus()
         return table
 
     def update_ui(self):
@@ -672,7 +800,7 @@ class QrcEditor(QMainWindow):
 
         file_name_exist = (file_name := self.collection.file_name()) is not None
         table_exist = (table := self.central_widget.currentWidget()) is not None
-        resource_selected = table_exist and table.currentRow() >= 0
+        resource_selected = table_exist and len(table.selectionModel().selectedRows()) > 0
         multiple_rows = table_exist and table.rowCount() > 1
         multiple_tables = len(self.collection) > 1
 
@@ -689,9 +817,13 @@ class QrcEditor(QMainWindow):
         if resource_selected:
             self.edit_edit_resource_action.setEnabled(True)
             self.edit_remove_resource_action.setEnabled(True)
+            self.edit_copy_action.setEnabled(True)
+            self.edit_cut_action.setEnabled(True)
         else:
             self.edit_edit_resource_action.setEnabled(False)
             self.edit_remove_resource_action.setEnabled(False)
+            self.edit_copy_action.setEnabled(False)
+            self.edit_cut_action.setEnabled(False)
 
         if file_name_exist and table_exist:
             self.edit_add_resource_action.setEnabled(True)
@@ -701,8 +833,9 @@ class QrcEditor(QMainWindow):
             self.edit_add_resource_action.setEnabled(False)
 
         if multiple_rows and resource_selected:
-            self.edit_move_down_action.setEnabled((index := table.currentRow()) < table.rowCount() - 1)
-            self.edit_move_up_action.setEnabled(index > 0)
+            indexes = [selected.row() for selected in table.selectionModel().selectedRows()]
+            self.edit_move_down_action.setEnabled(max(indexes) < table.rowCount() - 1)
+            self.edit_move_up_action.setEnabled(min(indexes) > 0)
         else:
             self.edit_move_down_action.setEnabled(False)
             self.edit_move_up_action.setEnabled(False)
@@ -746,11 +879,13 @@ class QrcEditor(QMainWindow):
             self.central_widget.setCurrentIndex(current)
 
     def update_window_menu(self):
-        """Update the window menu dinamically.
+        """Update the window menu dynamically.
         """
 
         self.window_menu.clear()
         menu = self.window_menu
+        if len(QrcEditor.instances) > 1:
+            self.add_actions(menu, (self.window_arrange_horizontal_action, self.window_arrange_vertical_action, None))
         i = 1
         for editor in QrcEditor.instances:
             title = editor.windowTitle()[:-3]
@@ -765,6 +900,38 @@ class QrcEditor(QMainWindow):
             action = menu.addAction("{0}{1}".format(shortcut, title))
             action.triggered.connect(self.raise_window)
             i += 1
+
+    @staticmethod
+    def window_arrange_horizontal():
+        """Arrange the open windows horizontally.
+        """
+
+        size = QApplication.screenAt(QApplication.desktop().cursor().pos()).availableGeometry()
+        top = size.top()
+        left = size.left()
+        height = size.height() // len(QrcEditor.instances)
+        width = size.width()
+        for instance in QrcEditor.instances:
+            instance.showNormal()
+            instance.move(left, top)
+            instance.resize(width, height)
+            top += height
+
+    @staticmethod
+    def window_arrange_vertical():
+        """Arrange the open windows vertically.
+        """
+
+        size = QApplication.screenAt(QApplication.desktop().cursor().pos()).availableGeometry()
+        top = size.top()
+        left = size.left()
+        height = size.height()
+        width = size.width() // len(QrcEditor.instances)
+        for instance in QrcEditor.instances:
+            instance.showNormal()
+            instance.move(left, top)
+            instance.resize(width, height)
+            left += width
 
 
 if __name__ == "__main__":
