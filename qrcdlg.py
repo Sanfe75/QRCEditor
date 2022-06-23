@@ -12,10 +12,10 @@
 
 import os
 
-from PySide2.QtCore import QLocale, Qt
-from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QAction, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QGridLayout,\
-    QLabel, QLineEdit, QMessageBox, QSlider
+from PySide6.QtCore import QLocale, Qt
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QGridLayout, QLabel,\
+    QLineEdit, QMessageBox, QSlider
 
 import qrcdata
 
@@ -269,7 +269,7 @@ class ResourceSettingsDlg(QDialog):
         """Reset the options.
         """
 
-        self.options["program"] = "pyside2-rcc.exe"
+        self.options["program"] = "pyside6-rcc.exe"
         self.options["no_compress"] = False
         self.options["compress"] = False
         self.options["compress_level"] = 1

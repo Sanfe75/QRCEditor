@@ -19,7 +19,7 @@ class Resource(object):
     """ Create a Resource object.
     """
 
-    def __init__(self, file, alias=None):
+    def __init__(self, file, alias=''):
         """Constructor for the Resource class.
 
         Parameters:

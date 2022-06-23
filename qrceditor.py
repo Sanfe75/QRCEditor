@@ -16,18 +16,18 @@ import os
 import platform
 import subprocess
 import sys
-import PySide2
+import PySide6
 
-from PySide2.QtCore import QSettings, Qt
-from PySide2.QtGui import QIcon, QKeySequence
-from PySide2.QtWidgets import QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QShortcut, QTableWidget,\
-    QTableWidgetItem, QTabWidget
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QShortcut
+from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMessageBox, QTableWidget, QTableWidgetItem,\
+    QTabWidget
 
 import qrcdata
 import qrcdlg
 import qrcresources
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 
 
 class QrcEditor(QMainWindow):
@@ -55,7 +55,7 @@ class QrcEditor(QMainWindow):
             _, message = self.collection.load(file_name)
             self.statusBar().showMessage(message, 5000)
 
-        self.options = {"program": "pyside2-rcc.exe",
+        self.options = {"program": "pyside6-rcc.exe",
                         "no_compress": False,
                         "compress": False,
                         "compress_level": 1,
@@ -331,7 +331,7 @@ class QrcEditor(QMainWindow):
         file_dlg = qrcdlg.ResourceFileDlg(self.collection.file_name())
         indexes = []
         row = self.central_widget.currentWidget().currentRow()
-        if file_dlg.exec_():
+        if file_dlg.exec():
             file_names = file_dlg.selectedFiles()
             for index, file_name in enumerate(file_names):
                 if not os.path.abspath(file_name).startswith(os.path.abspath(os.path.
@@ -344,7 +344,7 @@ class QrcEditor(QMainWindow):
             dialog = qrcdlg.ResourceDlg(self.collection, self.central_widget.currentIndex(), row, file_name, self)
             row += 1
             indexes.append(row)
-            if dialog.exec_():
+            if dialog.exec():
                 self.update_table(self.central_widget.currentWidget(), dialog.resources, indexes)
                 self.update_ui()
                 self.statusBar().showMessage("Resource added", 5000)
@@ -355,7 +355,7 @@ class QrcEditor(QMainWindow):
 
         initial_length = len(self.collection)
         dialog = qrcdlg.TabDlg(self.collection, None, self.central_widget.currentIndex(), self)
-        if dialog.exec_():
+        if dialog.exec():
             self.update_widget(dialog.index)
             self.update_ui()
             if len(self.collection) > initial_length:
@@ -399,7 +399,7 @@ class QrcEditor(QMainWindow):
 
         for index in indexes:
             dialog = qrcdlg.ResourceDlg(self.collection, table_index, index, parent=self)
-            if dialog.exec_():
+            if dialog.exec():
                 self.collection.set_dirty(True)
                 self.statusBar().showMessage("Resource edited", 5000)
 
@@ -411,7 +411,7 @@ class QrcEditor(QMainWindow):
         """
 
         dialog = qrcdlg.TabDlg(self.collection, self.collection[self.central_widget.currentIndex()], self)
-        if dialog.exec_():
+        if dialog.exec():
             self.update_widget(dialog.index)
             self.update_ui()
             self.statusBar().showMessage("Tab edited", 5000)
@@ -544,7 +544,7 @@ class QrcEditor(QMainWindow):
         """
 
         dialog = qrcdlg.ResourceSettingsDlg(self.options, self)
-        if dialog.exec_():
+        if dialog.exec():
             self.statusBar().showMessage("Settings updated", 5000)
 
     def edit_sort(self):
@@ -552,7 +552,7 @@ class QrcEditor(QMainWindow):
         """
 
         dialog = qrcdlg.TabSortDlg(self)
-        if dialog.exec_():
+        if dialog.exec():
             table = self.central_widget.currentWidget()
             table_index = self.central_widget.currentIndex()
             resources = self.collection[table_index]
@@ -577,7 +577,9 @@ class QrcEditor(QMainWindow):
         table = self.central_widget.currentWidget()
         table_index = self.central_widget.currentIndex()
         resources = self.collection[table_index]
-        self.update_table(table, resources, table.currentRow())
+        indexes = [selected.row() for selected in table.selectionModel().selectedRows()]
+
+        self.update_table(table, resources, indexes)
         self.update_ui()
         self.statusBar().showMessage("Table updated", 5000)
 
@@ -703,9 +705,9 @@ class QrcEditor(QMainWindow):
                      All rights reserved.
                      <p>This application can be used to create and
                      compile a resource collection file that can
-                     be used in in python pyside2 projects.
-                     <p> Python {1} - Qt {2} - PySide2 {3}
-                     """.format(__version__, platform.python_version(), PySide2.QtCore.__version__, PySide2.__version__)
+                     be used in in python pyside6 projects.
+                     <p> Python {1} - Qt {2} - PySide6 {3}
+                     """.format(__version__, platform.python_version(), PySide6.QtCore.__version__, PySide6.__version__)
 
         if self.rcc_version is not None:
             message += " - {0}".format(self.rcc_version)
@@ -724,7 +726,7 @@ class QrcEditor(QMainWindow):
         if (program := settings.value("Options/Program")) and self.check_program(program):
             self.options["program"] = program
         else:
-            self.options["program"] = "pyside2-rcc.exe"
+            self.options["program"] = "pyside6-rcc.exe"
         if (no_compress := settings.value("Options/NoCompress")) is not None:
             self.options["no_compress"] = True if no_compress == "true" else False
         if (compress := settings.value("Options/Compress")) is not None:
@@ -777,13 +779,13 @@ class QrcEditor(QMainWindow):
             alias = QTableWidgetItem(resource.alias())
             file = QTableWidgetItem(resource.file())
             if resources.is_duplicate(resource.alias()):
-                alias.setTextColor(Qt.red)
+                alias.setForeground(Qt.red)
             else:
-                alias.setTextColor(Qt.black)
+                alias.setForeground(Qt.black)
             if os.path.isfile(os.path.join(os.path.dirname(self.collection.file_name()), resource.file())):
-                file.setTextColor(Qt.black)
+                file.setForeground(Qt.black)
             else:
-                file.setTextColor(Qt.red)
+                file.setForeground(Qt.red)
             table.setItem(row, 0, alias)
             table.setItem(row, 1, file)
         table.resizeColumnsToContents()
@@ -901,12 +903,11 @@ class QrcEditor(QMainWindow):
             action.triggered.connect(self.raise_window)
             i += 1
 
-    @staticmethod
-    def window_arrange_horizontal():
+    def window_arrange_horizontal(self):
         """Arrange the open windows horizontally.
         """
 
-        size = QApplication.screenAt(QApplication.desktop().cursor().pos()).availableGeometry()
+        size = self.screen().geometry()
         top = size.top()
         left = size.left()
         height = size.height() // len(QrcEditor.instances)
@@ -917,12 +918,11 @@ class QrcEditor(QMainWindow):
             instance.resize(width, height)
             top += height
 
-    @staticmethod
-    def window_arrange_vertical():
+    def window_arrange_vertical(self):
         """Arrange the open windows vertically.
         """
 
-        size = QApplication.screenAt(QApplication.desktop().cursor().pos()).availableGeometry()
+        size = self.screen().geometry()
         top = size.top()
         left = size.left()
         height = size.height()
@@ -944,4 +944,4 @@ if __name__ == "__main__":
         QSettings().clear()
     MAIN_WINDOW = QrcEditor()
     MAIN_WINDOW.show()
-    APP.exec_()
+    APP.exec()
